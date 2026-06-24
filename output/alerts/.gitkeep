@@ -1,0 +1,3 @@
+# Email alert drafts are saved here at runtime.
+# This file exists only to track the folder in Git.
+# Actual .txt files are excluded by .gitignore

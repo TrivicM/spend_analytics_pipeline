@@ -1,0 +1,28 @@
+# Environment & secrets — NEVER commit your API key
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Output alerts (generated at runtime)
+output/alerts/*.txt
+
+# Excel temp files
+~$*.xlsx
+
+# IDE
+.vscode/
+.idea/

@@ -3,16 +3,22 @@
 dashboard_server.py  |  Corporate Spend Analytics Pipeline
 ===========================================================
 Zero-dependency HTTP server that serves the web dashboard and
-exposes two JSON API endpoints for live data.
+exposes JSON API endpoints for live data.
 
 Endpoints:
   GET /              → dashboard/index.html
   GET /api/data      → all spend metrics from spend.db (JSON)
   GET /api/run-log   → token usage + run history from output/run_log.json (JSON)
+  GET /api/config    → active model config
+  POST /api/config   → update active model config
+
+Auto-init:
+  If data/spend.db is missing at startup, the server automatically loads
+  sql/demo_seed.sql to provide a working demo dataset without any manual steps.
 
 Usage:
   python scripts/dashboard_server.py
-  → http://localhost:8000
+  → http://localhost:8001
 """
 
 import sys
@@ -29,8 +35,56 @@ if hasattr(sys.stdout, "reconfigure"):
 PORT = 8001
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 DB_PATH      = os.path.join(ROOT, "data", "spend.db")
+SEED_PATH    = os.path.join(ROOT, "sql", "demo_seed.sql")
+SCHEMA_PATH  = os.path.join(ROOT, "sql", "schema.sql")
+VIEWS_PATH   = os.path.join(ROOT, "sql", "views.sql")
 DASHBOARD    = os.path.join(ROOT, "dashboard", "index.html")
 RUN_LOG_PATH = os.path.join(ROOT, "output", "run_log.json")
+
+
+# ── Demo-Ready Auto-Init ──────────────────────────────────────────────────────
+
+def init_demo_db() -> bool:
+    """Load demo_seed.sql + schema + views into a fresh spend.db.
+
+    Called automatically at server startup when data/spend.db is missing.
+    Returns True if the database was initialised successfully.
+    """
+    if not os.path.exists(SEED_PATH):
+        print("   ⚠️  sql/demo_seed.sql not found — cannot auto-init.")
+        print("   Run: python scripts/generate_data.py")
+        return False
+
+    try:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        conn = sqlite3.connect(DB_PATH)
+
+        # 1. Apply schema (creates tables)
+        if os.path.exists(SCHEMA_PATH):
+            with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+                conn.executescript(f.read())
+
+        # 2. Load seed data
+        with open(SEED_PATH, "r", encoding="utf-8") as f:
+            conn.executescript(f.read())
+
+        # 3. Apply views
+        if os.path.exists(VIEWS_PATH):
+            with open(VIEWS_PATH, "r", encoding="utf-8") as f:
+                conn.executescript(f.read())
+
+        conn.commit()
+        conn.close()
+
+        row_count = sqlite3.connect(DB_PATH).execute(
+            "SELECT COUNT(*) FROM transactions"
+        ).fetchone()[0]
+        print(f"   ✅ Demo database ready: {row_count} transactions loaded from demo_seed.sql")
+        return True
+
+    except Exception as exc:
+        print(f"   ❌ Auto-init failed: {exc}")
+        return False
 
 
 # ── Database Queries ──────────────────────────────────────────────────────────
@@ -47,9 +101,8 @@ def query_spend_data() -> dict:
         return [dict(row) for row in cursor_result.fetchall()]
 
     # ── Rebuild views to ensure they exist ───────────────────────────────────
-    views_path = os.path.join(ROOT, "sql", "views.sql")
-    if os.path.exists(views_path):
-        with open(views_path, "r", encoding="utf-8") as f:
+    if os.path.exists(VIEWS_PATH):
+        with open(VIEWS_PATH, "r", encoding="utf-8") as f:
             conn.executescript(f.read())
 
     # ── Anomaly Log ───────────────────────────────────────────────────────────
@@ -247,8 +300,8 @@ def main() -> None:
     print("=" * 50)
 
     if not os.path.exists(DB_PATH):
-        print(f"\n⚠️  WARNING: Database not found at {DB_PATH}")
-        print("   Run 'python scripts/generate_data.py' first to populate data.\n")
+        print("\n🔄 No database found — auto-loading demo seed data...")
+        init_demo_db()
 
     server = HTTPServer(("localhost", PORT), SpendDashboardHandler)
     print(f"\n  Dashboard:  http://localhost:{PORT}/")

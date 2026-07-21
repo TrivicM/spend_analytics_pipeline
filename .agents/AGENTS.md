@@ -71,7 +71,8 @@ spend_analytics_pipeline/
 │   └── dashboard_server.py   # Python stdlib HTTP server (:8001)
 ├── sql/
 │   ├── schema.sql            # Table definitions
-│   └── views.sql             # Analytical views (4 views)
+│   ├── views.sql             # Analytical views (4 views)
+│   └── demo_seed.sql         # Pre-seeded demo data (218 txns) for auto-init
 ├── data/
 │   └── spend.db              # Generated SQLite database
 ├── dashboard/
@@ -106,6 +107,7 @@ spend_analytics_pipeline/
 | HTTP client in generate_data.py | `urllib.request` + `ssl` (stdlib) | Eliminates `requests` dep; works in all envs without pip |
 | GDPR Privacy Mode | CSS `blur(5px)` via `.privacy-mode-active` on `body` | Tab 1: names blurred in table, budget list & modal; persists in `localStorage` |
 | Model Switcher | Tab 2 benchmark table with `ⓘ` popovers | Select active model at runtime; saves to `output/config.json` |
+| Demo-Ready Auto-Init | Auto-loads `sql/demo_seed.sql` on server start | Instant zero-setup demo experience if `spend.db` is missing |
 | Dashboard port | `8001` | Avoids conflicts with common dev servers on `8000` |
 
 ---

@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spend Analytics Pipeline — Dashboard</title>
+  <meta name="description" content="Corporate spend analytics dashboard: anomaly monitoring, budget tracking, department spend, and AI agent observability for cost optimization." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ═══════════════════════════════════════════════════════
+       Design Tokens
+    ═══════════════════════════════════════════════════════ */
+    :root {
+      --bg-base:       #0a0b0f;
+      --bg-surface:    #111318;
+      --bg-card:       #161a24;
+      --bg-card-hover: #1c2030;
+      --border:        rgba(255,255,255,0.07);
+      --border-active: rgba(255,255,255,0.15);
+
+      /* Analytics tab accent — amber/orange */
+      --accent-a:      #f59e0b;
+      --accent-a-dim:  rgba(245,158,11,0.12);
+      --accent-a-glow: rgba(245,158,11,0.3);
+
+      /* Meta tab accent — cyan/teal */
+      --accent-m:      #06b6d4;
+      --accent-m-dim:  rgba(6,182,212,0.12);
+      --accent-m-glow: rgba(6,182,212,0.3);
+
+      /* Flag colors */
+      --flag-double:   #f59e0b;
+      --flag-weekend:  #ef4444;
+      --flag-overspend:#f97316;
+      --flag-currency: #a78bfa;
+
+      --text-primary:  #f1f5f9;
+      --text-secondary:#94a3b8;
+      --text-muted:    #475569;
+
+      --green:   #22c55e;
+      --yellow:  #eab308;
+      --red:     #ef4444;
+
+      --radius:  12px;
+      --radius-sm: 8px;
+      --shadow:  0 8px 32px rgba(0,0,0,0.4);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       Reset & Base
+    ═══════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; border: none; background: none; font-family: inherit; }
+    select { font-family: inherit; }
+    code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* ═══════════════════════════════════════════════════════
+       Scrollbar
+    ═══════════════════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--border-active); border-radius: 3px; }
+
+    /* ═══════════════════════════════════════════════════════
+       Layout
+    ═══════════════════════════════════════════════════════ */
+    .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(10,11,15,0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+    }
+    .header-inner {
+      max-width: 1600px; margin: 0 auto;
+      display: flex; align-items: center; gap: 24px;
+      height: 64px;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--accent-a), #fb923c);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .logo-text { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .logo-sub  { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+
+    /* Tab switcher */
+    .tab-switcher {
+      display: flex; gap: 4px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px;
+      margin-left: auto;
+    }
+    .tab-btn {
+      padding: 6px 18px;
+      border-radius: 7px;
+      font-size: 13px; font-weight: 500;
+      color: var(--text-secondary);
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text-primary); background: var(--bg-card); }
+    .tab-btn.active[data-tab="analytics"] {
+      background: var(--accent-a-dim);
+      color: var(--accent-a);
+      box-shadow: 0 0 0 1px var(--accent-a-glow);
+    }
+    .tab-btn.active[data-tab="meta"] {
+      background: var(--accent-m-dim);
+      color: var(--accent-m);
+      box-shadow: 0 0 0 1px var(--accent-m-glow);
+    }
+
+    /* Header controls */
+    .header-controls {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .select-control {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+      cursor: pointer;
+    }
+    .select-control:hover, .select-control:focus { border-color: var(--border-active); color: var(--text-primary); }
+
+    .refresh-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--accent-a-dim);
+      color: var(--accent-a);
+      border: 1px solid var(--accent-a-glow);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 500;
+      transition: all 0.2s;
+    }
+    .refresh-btn:hover { background: rgba(245,158,11,0.2); }
+    .refresh-btn.spinning .refresh-icon { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .last-updated {
+      font-size: 11px; color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* ── Tab Panels ─────────────────────────────────────── */
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Main Content ───────────────────────────────────── */
+    .main-content {
+      max-width: 1600px; margin: 0 auto;
+      padding: 28px 32px 48px;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       Cards & Surfaces
+    ═══════════════════════════════════════════════════════ */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .card:hover { border-color: var(--border-active); }
+    .card-title {
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       KPI Cards
+    ═══════════════════════════════════════════════════════ */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      position: relative; overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--kpi-color, var(--accent-a)), transparent);
+    }
+    .kpi-card:hover { border-color: var(--border-active); transform: translateY(-1px); }
+    .kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
+    .kpi-value { font-size: 28px; font-weight: 700; color: var(--text-primary); line-height: 1; margin-bottom: 6px; }
+    .kpi-sub   { font-size: 12px; color: var(--text-secondary); }
+    .kpi-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600; padding: 2px 8px;
+      border-radius: 20px; margin-top: 4px;
+    }
+    .kpi-badge.green  { background: rgba(34,197,94,0.15); color: var(--green); }
+    .kpi-badge.yellow { background: rgba(234,179,8,0.15);  color: var(--yellow); }
+    .kpi-badge.red    { background: rgba(239,68,68,0.15);  color: var(--red); }
+
+    /* ═══════════════════════════════════════════════════════
+       3-Panel Grid (Analytics Tab)
+    ═══════════════════════════════════════════════════════ */
+    .panel-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .panel-grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 15px; font-weight: 600; color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--accent-a);
+      box-shadow: 0 0 8px var(--accent-a-glow);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       Table
+    ═══════════════════════════════════════════════════════ */
+    .table-wrapper {
+      overflow-x: auto;
+      border-radius: var(--radius-sm);
+    }
+    table {
+      width: 100%; border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead th {
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none;
+      white-space: nowrap;
+    }
+    thead th:hover { color: var(--text-secondary); }
+    tbody tr {
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      transition: background 0.15s;
+    }
+    tbody tr:hover { background: rgba(255,255,255,0.03); cursor: pointer; }
+    tbody tr:last-child { border-bottom: none; }
+    td {
+      padding: 10px 12px;
+      color: var(--text-secondary);
+      vertical-align: middle;
+    }
+    td.primary { color: var(--text-primary); font-weight: 500; }
+
+    /* Flag badges */
+    .flag-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      padding: 3px 8px; border-radius: 4px;
+    }
+    .flag-DOUBLE_SWIPE   { background: rgba(245,158,11,0.15); color: var(--flag-double);   border: 1px solid rgba(245,158,11,0.25); }
+    .flag-WEEKEND_SPIKE  { background: rgba(239,68,68,0.15);  color: var(--flag-weekend);  border: 1px solid rgba(239,68,68,0.25); }
+    .flag-OVERSPEND      { background: rgba(249,115,22,0.15); color: var(--flag-overspend);border: 1px solid rgba(249,115,22,0.25); }
+    .flag-UNUSUAL_CURRENCY{background: rgba(167,139,250,0.15);color: var(--flag-currency); border: 1px solid rgba(167,139,250,0.25); }
+
+    /* ═══════════════════════════════════════════════════════
+       Budget Progress Bars
+    ═══════════════════════════════════════════════════════ */
+    .budget-list { display: flex; flex-direction: column; gap: 12px; max-height: 520px; overflow-y: auto; }
+    .budget-item { padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .budget-item:last-child { border-bottom: none; }
+    .budget-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 6px;
+    }
+    .budget-name { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .budget-dept { font-size: 11px; color: var(--text-muted); }
+    .budget-amounts { font-size: 12px; color: var(--text-secondary); text-align: right; }
+    .budget-pct { font-size: 11px; font-weight: 700; }
+    .pct-green  { color: var(--green); }
+    .pct-yellow { color: var(--yellow); }
+    .pct-red    { color: var(--red); }
+    .progress-bar-bg {
+      height: 5px; background: var(--bg-surface);
+      border-radius: 3px; overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%; border-radius: 3px;
+      transition: width 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .fill-green  { background: linear-gradient(90deg, var(--green), #16a34a); }
+    .fill-yellow { background: linear-gradient(90deg, var(--yellow), #ca8a04); }
+    .fill-red    { background: linear-gradient(90deg, var(--red), #dc2626);   }
+
+    /* ═══════════════════════════════════════════════════════
+       Currency Pills
+    ═══════════════════════════════════════════════════════ */
+    .currency-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .currency-row:last-child { border-bottom: none; }
+    .currency-pill {
+      font-size: 12px; font-weight: 700; padding: 4px 10px;
+      border-radius: 6px; width: 48px; text-align: center;
+    }
+    .cur-EUR { background: rgba(34,197,94,0.15);  color: var(--green);  }
+    .cur-USD { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .cur-RSD { background: rgba(167,139,250,0.15);color: var(--flag-currency); }
+    .currency-bar-bg { flex: 1; height: 6px; background: var(--bg-surface); border-radius: 3px; overflow: hidden; }
+    .currency-bar-fill { height: 100%; border-radius: 3px; }
+    .currency-val { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+    .currency-count { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+    /* ═══════════════════════════════════════════════════════
+       Charts
+    ═══════════════════════════════════════════════════════ */
+    .chart-container { position: relative; }
+
+    /* ═══════════════════════════════════════════════════════
+       Meta Tab — Run History
+    ═══════════════════════════════════════════════════════ */
+    .meta-grid-top {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px; margin-bottom: 24px;
+    }
+    .meta-kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      position: relative; overflow: visible;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .meta-kpi-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent-m), transparent);
+    }
+    .meta-kpi-card:hover { border-color: var(--border-active); transform: translateY(-1px); }
+    .meta-kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
+    .meta-kpi-value { font-size: 26px; font-weight: 700; color: var(--accent-m); line-height: 1; }
+    .meta-kpi-sub   { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+
+    .meta-grid-mid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px; margin-bottom: 24px;
+    }
+    .no-data {
+      text-align: center; padding: 40px 20px;
+      color: var(--text-muted); font-size: 14px;
+    }
+    .no-data-icon { font-size: 36px; margin-bottom: 12px; }
+
+    /* Optimization cards */
+    .opt-list { display: flex; flex-direction: column; gap: 10px; }
+    .opt-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      display: flex; gap: 14px; align-items: flex-start;
+      transition: border-color 0.2s;
+    }
+    .opt-card:hover { border-color: var(--border-active); }
+    .opt-rank {
+      font-size: 18px; font-weight: 800; color: var(--accent-m);
+      min-width: 28px; line-height: 1.2;
+    }
+    .opt-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px; }
+    .opt-desc  { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+    .opt-impact{
+      font-size: 11px; font-weight: 600; margin-top: 5px;
+      color: var(--accent-m);
+    }
+
+    /* Model benchmark */
+    .benchmark-table th { cursor: default; }
+    .model-active td { background: rgba(6,182,212,0.05); }
+    .model-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .badge-recommended { background: rgba(6,182,212,0.15); color: var(--accent-m); border: 1px solid rgba(6,182,212,0.3); }
+    .badge-expensive    { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
+
+    /* ── Info Tooltip ──────────────────────────────────────── */
+    .info-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: rgba(6,182,212,0.15);
+      border: 1px solid rgba(6,182,212,0.35);
+      color: var(--accent-m);
+      font-size: 10px; font-weight: 700;
+      cursor: pointer; vertical-align: middle;
+      margin-left: 6px; flex-shrink: 0;
+      transition: background 0.2s, border-color 0.2s;
+      position: relative;
+    }
+    .info-btn:hover { background: rgba(6,182,212,0.28); border-color: var(--accent-m); }
+    .info-btn.active { background: var(--accent-m); color: #000; }
+
+    .info-popover {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      width: 280px;
+      background: #1e2535;
+      border: 1px solid rgba(6,182,212,0.4);
+      border-radius: 10px;
+      padding: 14px 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 300;
+      text-align: left;
+    }
+    .info-popover.open { display: block; animation: popIn 0.18s ease; }
+    @keyframes popIn { from { opacity:0; transform: translateX(-50%) translateY(-6px); } }
+    .info-popover::after {
+      content: '';
+      position: absolute; bottom: 100%; left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-bottom-color: rgba(6,182,212,0.4);
+    }
+    .info-popover-title {
+      font-size: 12px; font-weight: 700;
+      color: var(--accent-m); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .info-popover-body {
+      font-size: 12px; color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .info-popover-body strong { color: var(--text-primary); }
+    .info-popover-body ul {
+      margin: 6px 0 0 14px;
+      padding: 0;
+    }
+    .info-popover-body li { margin-bottom: 3px; }
+
+    /* ═══════════════════════════════════════════════════════
+       Modal
+    ═══════════════════════════════════════════════════════ */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+      z-index: 200;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border-active);
+      border-radius: 16px;
+      padding: 28px 32px;
+      max-width: 520px; width: 90%;
+      box-shadow: var(--shadow);
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn { from { opacity:0; transform: scale(0.95) translateY(8px); } }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .modal-title { font-size: 16px; font-weight: 700; color: var(--text-primary); }
+    .modal-close {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: var(--bg-surface); color: var(--text-muted);
+      font-size: 16px; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+    }
+    .modal-close:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+    .modal-field { margin-bottom: 14px; }
+    .modal-field-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 4px; }
+    .modal-field-value { font-size: 14px; color: var(--text-primary); }
+
+    /* ═══════════════════════════════════════════════════════
+       Empty / Loading States
+    ═══════════════════════════════════════════════════════ */
+    .loading-row td { text-align: center; padding: 32px; color: var(--text-muted); }
+    .pulse { animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* ═══════════════════════════════════════════════════════
+       Responsive
+    ═══════════════════════════════════════════════════════ */
+    @media (max-width: 1200px) {
+      .kpi-grid       { grid-template-columns: repeat(2,1fr); }
+      .panel-grid     { grid-template-columns: 1fr; }
+      .panel-grid-3   { grid-template-columns: 1fr; }
+      .meta-grid-top  { grid-template-columns: repeat(2,1fr); }
+      .meta-grid-mid  { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 768px) {
+      .main-content   { padding: 16px; }
+      .header-inner   { flex-wrap: wrap; height: auto; padding: 12px 0; }
+      .kpi-grid       { grid-template-columns: 1fr 1fr; }
+      .header-controls{ flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════
+     HEADER
+════════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">📊</div>
+      <div>
+        <div class="logo-text">Spend Analytics Pipeline</div>
+        <div class="logo-sub">Corporate Card Monitoring</div>
+      </div>
+    </div>
+
+    <!-- Tab Switcher -->
+    <div class="tab-switcher" role="tablist">
+      <button class="tab-btn active" id="tab-analytics-btn" data-tab="analytics" role="tab" onclick="switchTab('analytics')">📈 Analytics</button>
+      <button class="tab-btn" id="tab-meta-btn" data-tab="meta" role="tab" onclick="switchTab('meta')">🤖 Agent Observability</button>
+    </div>
+
+    <!-- Controls (analytics only) -->
+    <div class="header-controls" id="analytics-controls">
+      <select class="select-control" id="dept-filter" onchange="applyFilters()">
+        <option value="">All Departments</option>
+        <option value="Marketing">Marketing</option>
+        <option value="Engineering">Engineering</option>
+        <option value="Sales">Sales</option>
+        <option value="Finance">Finance</option>
+        <option value="Operations">Operations</option>
+      </select>
+      <select class="select-control" id="flag-filter" onchange="applyFilters()">
+        <option value="">All Flag Types</option>
+        <option value="DOUBLE_SWIPE">Double Swipe</option>
+        <option value="WEEKEND_SPIKE">Weekend Spike</option>
+        <option value="OVERSPEND">Overspend</option>
+        <option value="UNUSUAL_CURRENCY">Unusual Currency</option>
+      </select>
+      <button class="refresh-btn" id="refresh-btn" onclick="refreshData()">
+        <span class="refresh-icon" style="display:inline-block">↻</span>
+        Refresh
+      </button>
+      <span class="last-updated" id="last-updated">—</span>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════════════
+     TAB 1 — ANALYTICS DASHBOARD
+════════════════════════════════════════════════════════ -->
+<div class="tab-panel active" id="panel-analytics" role="tabpanel">
+  <main class="main-content">
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card" style="--kpi-color: var(--accent-a)">
+        <div class="kpi-label">Total Spend</div>
+        <div class="kpi-value" id="kpi-total-spend">—</div>
+        <div class="kpi-sub">EUR equivalent · all departments</div>
+      </div>
+      <div class="kpi-card" style="--kpi-color: var(--red)">
+        <div class="kpi-label">Flagged Transactions</div>
+        <div class="kpi-value" id="kpi-flagged">—</div>
+        <div class="kpi-sub"><span id="kpi-flagged-pct">—</span> of total transactions</div>
+        <div id="kpi-flagged-badge"></div>
+      </div>
+      <div class="kpi-card" style="--kpi-color: var(--flag-overspend)">
+        <div class="kpi-label">Employees Over Budget</div>
+        <div class="kpi-value" id="kpi-overspend">—</div>
+        <div class="kpi-sub">of 15 employees · June 2025</div>
+        <div id="kpi-overspend-badge"></div>
+      </div>
+      <div class="kpi-card" style="--kpi-color: var(--flag-currency)">
+        <div class="kpi-label">Currency Exposure</div>
+        <div class="kpi-value" id="kpi-currencies">—</div>
+        <div class="kpi-sub">active currencies detected</div>
+        <div id="kpi-currency-pills"></div>
+      </div>
+    </div>
+
+    <!-- Anomaly Log + Budget -->
+    <div class="panel-grid">
+      <!-- Anomaly Log -->
+      <div class="card">
+        <div class="section-title">
+          <span class="section-title-dot"></span>
+          Anomaly Log
+          <span id="anomaly-count-badge" style="font-size:12px;color:var(--text-muted);font-weight:400;margin-left:4px;"></span>
+        </div>
+        <div class="table-wrapper">
+          <table id="anomaly-table">
+            <thead>
+              <tr>
+                <th onclick="sortTable('anomaly-table',0)">Employee ↕</th>
+                <th onclick="sortTable('anomaly-table',1)">Department ↕</th>
+                <th onclick="sortTable('anomaly-table',2)">Merchant ↕</th>
+                <th onclick="sortTable('anomaly-table',3)">Amount EUR ↕</th>
+                <th onclick="sortTable('anomaly-table',4)">Flag ↕</th>
+                <th onclick="sortTable('anomaly-table',5)">Timestamp ↕</th>
+              </tr>
+            </thead>
+            <tbody id="anomaly-tbody">
+              <tr class="loading-row"><td colspan="6"><span class="pulse">Loading...</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Budget vs. Actual -->
+      <div class="card">
+        <div class="section-title">
+          <span class="section-title-dot" style="background:var(--flag-overspend);box-shadow:0 0 8px rgba(249,115,22,0.4)"></span>
+          Budget vs. Actual
+        </div>
+        <div class="budget-list" id="budget-list">
+          <div class="no-data"><div class="no-data-icon pulse">⏳</div>Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dept Spend + Currency -->
+    <div class="panel-grid-3">
+      <!-- Department Spend Chart -->
+      <div class="card">
+        <div class="section-title">
+          <span class="section-title-dot" style="background:#60a5fa;box-shadow:0 0 8px rgba(96,165,250,0.4)"></span>
+          Department Spend
+        </div>
+        <div class="chart-container" style="height:280px;">
+          <canvas id="dept-chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Currency Breakdown -->
+      <div class="card">
+        <div class="section-title">
+          <span class="section-title-dot" style="background:var(--flag-currency);box-shadow:0 0 8px rgba(167,139,250,0.4)"></span>
+          Currency Breakdown
+        </div>
+        <div id="currency-list"></div>
+        <div class="chart-container" style="height:180px; margin-top:12px;">
+          <canvas id="currency-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     TAB 2 — AGENT OBSERVABILITY
+════════════════════════════════════════════════════════ -->
+<div class="tab-panel" id="panel-meta" role="tabpanel">
+  <main class="main-content">
+
+    <!-- Meta KPI Cards -->
+    <div class="meta-grid-top" id="meta-kpi-grid">
+
+      <!-- Total Runs -->
+      <div class="meta-kpi-card">
+        <div class="meta-kpi-label" style="display:flex;align-items:center">
+          Total Runs
+          <button class="info-btn" id="info-btn-runs" onclick="toggleInfo('runs')" aria-label="What is a run?">i
+            <div class="info-popover" id="info-pop-runs">
+              <div class="info-popover-title">🔄 What happens in one Run?</div>
+              <div class="info-popover-body">
+                A single run executes the full pipeline end-to-end:
+                <ul>
+                  <li>Reads <strong>218 transactions</strong> from the database</li>
+                  <li>Identifies <strong>38 flagged anomalies</strong> across 5 departments</li>
+                  <li>Makes <strong>5 separate AI API calls</strong> (one per manager)</li>
+                  <li>Generates <strong>5 professional email drafts</strong> ready for review</li>
+                  <li>Logs <strong>token usage &amp; cost</strong> for this observability dashboard</li>
+                </ul>
+                All of this happens automatically — no human input required after launch.
+              </div>
+            </div>
+          </button>
+        </div>
+        <div class="meta-kpi-value" id="meta-total-runs">—</div>
+        <div class="meta-kpi-sub">since first run_log.json</div>
+      </div>
+
+      <!-- Last Run Duration -->
+      <div class="meta-kpi-card">
+        <div class="meta-kpi-label" style="display:flex;align-items:center">
+          Last Run Duration
+          <button class="info-btn" id="info-btn-dur" onclick="toggleInfo('dur')" aria-label="Duration context">i
+            <div class="info-popover" id="info-pop-dur">
+              <div class="info-popover-title">⏱ What does this time include?</div>
+              <div class="info-popover-body">
+                The timer covers the <strong>entire pipeline</strong> from start to finish:
+                <ul>
+                  <li>Database query &amp; view rebuild</li>
+                  <li>AI prompt construction per department</li>
+                  <li>5 Gemini API round-trips (network + inference)</li>
+                  <li>Writing alert files &amp; logging results</li>
+                </ul>
+                <strong>Human equivalent:</strong> a finance analyst manually reviewing the same transactions, writing 5 emails, and logging results would take <strong>~2–3 hours</strong>.
+              </div>
+            </div>
+          </button>
+        </div>
+        <div class="meta-kpi-value" id="meta-last-duration">—</div>
+        <div class="meta-kpi-sub">seconds · last run</div>
+      </div>
+
+      <!-- Last Run Tokens -->
+      <div class="meta-kpi-card">
+        <div class="meta-kpi-label" style="display:flex;align-items:center">
+          Last Run Tokens
+          <button class="info-btn" id="info-btn-tok" onclick="toggleInfo('tok')" aria-label="What are tokens?">i
+            <div class="info-popover" id="info-pop-tok">
+              <div class="info-popover-title">🔤 What are tokens?</div>
+              <div class="info-popover-body">
+                Tokens are the <strong>units of text</strong> that AI models read and write. Roughly:
+                <ul>
+                  <li>1 token ≈ <strong>¾ of an English word</strong></li>
+                  <li>6,809 tokens ≈ <strong>~5,100 words</strong> processed</li>
+                  <li>Split into: <em>input</em> (data sent to AI) + <em>output</em> (email text generated)</li>
+                </ul>
+                The token count directly determines API cost — fewer tokens = lower cost.
+              </div>
+            </div>
+          </button>
+        </div>
+        <div class="meta-kpi-value" id="meta-last-tokens">—</div>
+        <div class="meta-kpi-sub">total tokens · last run</div>
+      </div>
+
+      <!-- Est. Cost -->
+      <div class="meta-kpi-card">
+        <div class="meta-kpi-label" style="display:flex;align-items:center">
+          Est. Cost (Last Run)
+          <button class="info-btn" id="info-btn-cost" onclick="toggleInfo('cost')" aria-label="Cost context">i
+            <div class="info-popover" id="info-pop-cost">
+              <div class="info-popover-title">💰 Is this cost significant?</div>
+              <div class="info-popover-body">
+                To put this in perspective:
+                <ul>
+                  <li>This run: <strong>~$0.001</strong> (less than 0.1 cent)</li>
+                  <li>Daily runs for a month: <strong>~$0.03</strong></li>
+                  <li>Annual cost at daily frequency: <strong>~$0.37</strong></li>
+                </ul>
+                Pricing is based on <strong>Gemini 2.5 Flash Lite</strong> — the most cost-efficient model in the Gemini family. See the Model Benchmark table below for a comparison.
+              </div>
+            </div>
+          </button>
+        </div>
+        <div class="meta-kpi-value" id="meta-last-cost">—</div>
+        <div class="meta-kpi-sub">USD · Gemini Flash Lite pricing</div>
+      </div>
+
+    </div>
+
+    <div class="meta-grid-mid">
+      <!-- Run History -->
+      <div class="card">
+        <div class="section-title">
+          <span class="section-title-dot" style="background:var(--accent-m);box-shadow:0 0 8px var(--accent-m-glow)"></span>
+          Run History
+        </div>
+        <div class="table-wrapper">
+          <table id="run-history-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Timestamp</th>
+                <th>Duration (s)</th>
+                <th>Flags</th>
+                <th>API Calls</th>
+                <th>Total Tokens</th>
+                <th>Est. Cost USD</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="run-history-tbody">
+              <tr class="loading-row"><td colspan="8">
+                <div class="no-data">
+                  <div class="no-data-icon">🤖</div>
+                  No run data yet.<br>Run <code>python scripts/ai_notifier.py</code> to generate your first log.
+                </div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Token Usage Chart -->
+      <div class="card">
+        <div class="section-title">
+          <span class="section-title-dot" style="background:var(--accent-m);box-shadow:0 0 8px var(--accent-m-glow)"></span>
+          Token Usage — Last Run (per Department)
+        </div>
+        <div class="chart-container" style="height:280px;">
+          <canvas id="token-chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="meta-grid-mid">
+      <!-- Optimization Recommendations -->
+      <div class="card">
+        <div class="section-title">
+          <span class="section-title-dot" style="background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.4)"></span>
+          Cost Optimization Recommendations
+        </div>
+        <div class="opt-list">
+          <div class="opt-card">
+            <div class="opt-rank">🥇</div>
+            <div>
+              <div class="opt-title">Batch all anomalies into ONE API call</div>
+              <div class="opt-desc">Currently: 1 Gemini call per manager (5 departments = 5 API calls). Combine all into one structured prompt with per-manager sections.</div>
+              <div class="opt-impact">↓ ~80% API call overhead · same output quality</div>
+            </div>
+          </div>
+          <div class="opt-card">
+            <div class="opt-rank">🥈</div>
+            <div>
+              <div class="opt-title">Remove redundant flag explanations in prompt</div>
+              <div class="opt-desc">FLAG_EXPLANATIONS are repeated for every transaction in the prompt. Move to a single header definition block — referenced once per flag type.</div>
+              <div class="opt-impact">↓ ~20–30% input token reduction per call</div>
+            </div>
+          </div>
+          <div class="opt-card">
+            <div class="opt-rank">🥉</div>
+            <div>
+              <div class="opt-title">Switch to structured JSON output mode</div>
+              <div class="opt-desc">Instead of free-text email drafts, use Gemini's JSON response mode to produce structured alert data. Faster inference, lower output tokens, programmatically usable.</div>
+              <div class="opt-impact">↓ ~35% output tokens · faster responses</div>
+            </div>
+          </div>
+          <div class="opt-card">
+            <div class="opt-rank">4</div>
+            <div>
+              <div class="opt-title">Cache view results to avoid repeat DB queries</div>
+              <div class="opt-desc">On re-runs with unchanged spend.db, skip the SQL view rebuild and DB query — load from a JSON snapshot instead.</div>
+              <div class="opt-impact">↓ DB queries to 0 on unchanged data</div>
+            </div>
+          </div>
+          <div class="opt-card">
+            <div class="opt-rank">5</div>
+            <div>
+              <div class="opt-title">Shorten timestamp format in prompts</div>
+              <div class="opt-desc">Full ISO 8601 timestamps (26 chars each) are verbose in prompts. Use date + time only: "15 Jun 14:32" saves ~10 chars per transaction row.</div>
+              <div class="opt-impact">↓ ~5–10% input tokens across all calls</div>
+            </div>
+          </div>
+          <div class="opt-card" style="border-color: rgba(6,182,212,0.3);">
+            <div class="opt-rank">✅</div>
+            <div>
+              <div class="opt-title">Flash Lite is already the optimal model</div>
+              <div class="opt-desc">gemini-2.5-flash-lite is the right choice for structured compliance emails — do not upgrade to Flash or Pro without a measurable quality gap.</div>
+              <div class="opt-impact">Current configuration is cost-optimal</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model Benchmark -->
+      <div class="card">
+        <div class="section-title">
+          <span class="section-title-dot" style="background:var(--accent-m);box-shadow:0 0 8px var(--accent-m-glow)"></span>
+          Model Benchmark — Gemini Family
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Simulated comparison based on public Gemini pricing (Q3 2025). Estimated for a typical 5-manager run (~8,000 total tokens).</p>
+        <div class="table-wrapper">
+          <table class="benchmark-table">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Input $/1M</th>
+                <th>Output $/1M</th>
+                <th>Est. Run Cost</th>
+                <th>Quality Fit</th>
+                <th>Verdict</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="model-active">
+                <td class="primary mono">gemini-2.5-flash-lite</td>
+                <td>$0.075</td>
+                <td>$0.30</td>
+                <td class="primary">~$0.001</td>
+                <td>⭐⭐⭐⭐</td>
+                <td><span class="model-badge badge-recommended">✓ Recommended</span></td>
+              </tr>
+              <tr>
+                <td class="primary mono">gemini-2.5-flash</td>
+                <td>$0.30</td>
+                <td>$1.00</td>
+                <td>~$0.004</td>
+                <td>⭐⭐⭐⭐⭐</td>
+                <td><span class="model-badge" style="background:rgba(234,179,8,0.15);color:var(--yellow);border:1px solid rgba(234,179,8,0.3);">Overkill</span></td>
+              </tr>
+              <tr>
+                <td class="primary mono">gemini-2.5-pro</td>
+                <td>$1.25</td>
+                <td>$10.00</td>
+                <td>~$0.09</td>
+                <td>⭐⭐⭐⭐⭐</td>
+                <td><span class="model-badge badge-expensive">Not Justified</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:14px;">* Free tier covers most usage. Paid pricing shown for scale reference. Verify at <a href="https://ai.google.dev/pricing" target="_blank" style="color:var(--accent-m);">ai.google.dev/pricing</a>.</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     ANOMALY DETAIL MODAL
+════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Transaction Detail</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════ -->
+<script>
+  /* ──────────────────────────────────────────────────────
+     Config & State
+  ────────────────────────────────────────────────────── */
+  const API_BASE = (() => {
+    if (location.protocol === 'file:') return '';
+    return `${location.protocol}//${location.host}`;
+  })();
+
+  let spendData = null;
+  let runLogData = [];
+  let deptChart = null;
+  let currencyChart = null;
+  let tokenChart = null;
+  let sortState = {};
+
+  /* ──────────────────────────────────────────────────────
+     Tab Switching
+  ────────────────────────────────────────────────────── */
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`panel-${tab}`).classList.add('active');
+    document.getElementById(`tab-${tab}-btn`).classList.add('active');
+    document.getElementById('analytics-controls').style.display = tab === 'analytics' ? 'flex' : 'none';
+    if (tab === 'meta' && runLogData.length === 0) loadRunLog();
+  }
+
+  /* ──────────────────────────────────────────────────────
+     Data Loading — Analytics
+  ────────────────────────────────────────────────────── */
+  async function refreshData() {
+    const btn = document.getElementById('refresh-btn');
+    btn.classList.add('spinning');
+    try {
+      const resp = await fetch(`${API_BASE}/api/data`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      spendData = await resp.json();
+      renderAnalytics();
+      document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    } catch (e) {
+      console.error('Failed to load spend data:', e);
+      document.getElementById('last-updated').textContent = '⚠ Failed to load';
+    } finally {
+      btn.classList.remove('spinning');
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────
+     Data Loading — Meta
+  ────────────────────────────────────────────────────── */
+  async function loadRunLog() {
+    try {
+      const resp = await fetch(`${API_BASE}/api/run-log`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      runLogData = await resp.json();
+      renderMeta();
+    } catch (e) {
+      console.error('Failed to load run log:', e);
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────
+     Analytics Rendering
+  ────────────────────────────────────────────────────── */
+  function renderAnalytics() {
+    if (!spendData || spendData.error) return;
+    renderKPIs();
+    applyFilters();
+    renderBudget();
+    renderDeptChart();
+    renderCurrencyBreakdown();
+  }
+
+  function renderKPIs() {
+    const k = spendData.kpi;
+    document.getElementById('kpi-total-spend').textContent = '€' + formatNum(k.total_spend_eur);
+    document.getElementById('kpi-flagged').textContent = k.total_flagged;
+    document.getElementById('kpi-flagged-pct').textContent = k.flagged_pct + '%';
+    document.getElementById('kpi-overspend').textContent = k.overspend_employee_count;
+    document.getElementById('kpi-currencies').textContent = k.currency_count;
+
+    const fp = k.flagged_pct;
+    let fbClass = fp > 15 ? 'red' : fp > 5 ? 'yellow' : 'green';
+    document.getElementById('kpi-flagged-badge').innerHTML =
+      `<span class="kpi-badge ${fbClass}">${fp > 15 ? '⚠ High' : fp > 5 ? '⚠ Elevated' : '✓ Normal'}</span>`;
+
+    const ov = k.overspend_employee_count;
+    let ovClass = ov >= 3 ? 'red' : ov > 0 ? 'yellow' : 'green';
+    document.getElementById('kpi-overspend-badge').innerHTML =
+      `<span class="kpi-badge ${ovClass}">${ov >= 3 ? '⚠ Critical' : ov > 0 ? '⚠ Warning' : '✓ All clear'}</span>`;
+
+    const curPills = (spendData.currencies || []).map(c =>
+      `<span class="currency-pill cur-${c.currency}" style="display:inline-block;margin:4px 3px 0 0;font-size:11px">${c.currency}</span>`
+    ).join('');
+    document.getElementById('kpi-currency-pills').innerHTML = curPills;
+  }
+
+  function applyFilters() {
+    if (!spendData) return;
+    const dept = document.getElementById('dept-filter').value;
+    const flag = document.getElementById('flag-filter').value;
+
+    let rows = spendData.anomalies || [];
+    if (dept) rows = rows.filter(r => r.department === dept);
+    if (flag) rows = rows.filter(r => r.flag_reason === flag);
+
+    renderAnomalyTable(rows);
+  }
+
+  function renderAnomalyTable(rows) {
+    document.getElementById('anomaly-count-badge').textContent = `(${rows.length} flagged)`;
+    const tbody = document.getElementById('anomaly-tbody');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted)">No anomalies match the current filter.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map((r, i) => `
+      <tr onclick="openModal(${i})" data-idx="${i}">
+        <td class="primary">${r.employee_name}</td>
+        <td>${r.department}</td>
+        <td>${r.merchant}</td>
+        <td class="primary mono">${formatNum(r.amount_eur)}</td>
+        <td><span class="flag-badge flag-${r.flag_reason}">${flagIcon(r.flag_reason)} ${r.flag_reason.replace('_',' ')}</span></td>
+        <td class="mono" style="font-size:12px">${formatTs(r.timestamp)}</td>
+      </tr>
+    `).join('');
+    // Store for modal
+    window._filteredAnomalies = rows;
+  }
+
+  function renderBudget() {
+    const list = document.getElementById('budget-list');
+    const rows = [...(spendData.budget_all || [])].sort((a,b) => b.pct_used - a.pct_used);
+    if (!rows.length) { list.innerHTML = '<div class="no-data">No budget data.</div>'; return; }
+
+    list.innerHTML = rows.map(r => {
+      const pct = Math.min(r.pct_used, 100);
+      const over = r.delta_eur > 0;
+      const pctClass = over ? 'pct-red' : r.pct_used > 80 ? 'pct-yellow' : 'pct-green';
+      const fillClass = over ? 'fill-red' : r.pct_used > 80 ? 'fill-yellow' : 'fill-green';
+      const displayPct = Math.min(r.pct_used, 100);
+      return `
+        <div class="budget-item">
+          <div class="budget-header">
+            <div>
+              <div class="budget-name">${r.employee_name}</div>
+              <div class="budget-dept">${r.department}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="budget-amounts">€${formatNum(r.spent_eur)} / €${formatNum(r.allocated_eur)}</div>
+              <div class="budget-pct ${pctClass}">${r.pct_used}%${over ? ' (+€'+formatNum(r.delta_eur)+')' : ''}</div>
+            </div>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill ${fillClass}" style="width:${displayPct}%"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderDeptChart() {
+    const ctx = document.getElementById('dept-chart').getContext('2d');
+    if (deptChart) deptChart.destroy();
+    const rows = spendData.dept_spend || [];
+    deptChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: rows.map(r => r.department),
+        datasets: [{
+          label: 'Total Spend (EUR)',
+          data: rows.map(r => r.total_spent_eur),
+          backgroundColor: rows.map(r => r.flagged_count > 0 ? 'rgba(245,158,11,0.7)' : 'rgba(96,165,250,0.6)'),
+          borderColor: rows.map(r => r.flagged_count > 0 ? '#f59e0b' : '#60a5fa'),
+          borderWidth: 1, borderRadius: 6,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const r = rows[ctx.dataIndex];
+                return [`€${formatNum(ctx.raw)}`, `Avg: €${formatNum(r.avg_transaction_eur)}`, `Flagged: ${r.flagged_count}`];
+              }
+            }
+          }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font:{size:11} } },
+          y: { grid: { display: false }, ticks: { color: '#94a3b8', font:{size:12} } }
+        }
+      }
+    });
+  }
+
+  function renderCurrencyBreakdown() {
+    const currencies = spendData.currencies || [];
+    const total = currencies.reduce((s,c) => s + c.total_eur_equivalent, 0);
+    const colors = { EUR: ['rgba(34,197,94,0.7)','#22c55e'], USD: ['rgba(59,130,246,0.7)','#60a5fa'], RSD: ['rgba(167,139,250,0.7)','#a78bfa'] };
+
+    document.getElementById('currency-list').innerHTML = currencies.map(c => {
+      const pct = total > 0 ? (c.total_eur_equivalent / total * 100).toFixed(1) : 0;
+      const col = (colors[c.currency] || ['rgba(255,255,255,0.3)','#fff']);
+      return `
+        <div class="currency-row">
+          <span class="currency-pill cur-${c.currency}">${c.currency}</span>
+          <div class="currency-bar-bg">
+            <div class="currency-bar-fill" style="width:${pct}%;background:${col[0]};"></div>
+          </div>
+          <span class="currency-val">€${formatNum(c.total_eur_equivalent)}</span>
+          <span class="currency-count">${c.transaction_count} txns</span>
+        </div>
+      `;
+    }).join('');
+
+    const ctx = document.getElementById('currency-chart').getContext('2d');
+    if (currencyChart) currencyChart.destroy();
+    currencyChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: currencies.map(c => c.currency),
+        datasets: [{
+          data: currencies.map(c => c.total_eur_equivalent),
+          backgroundColor: currencies.map(c => (colors[c.currency] || ['rgba(255,255,255,0.3)'])[0]),
+          borderColor: currencies.map(c => (colors[c.currency] || ['#fff'])[1]),
+          borderWidth: 2, hoverOffset: 8
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '65%',
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#94a3b8', font:{size:11}, padding: 16 } },
+          tooltip: { callbacks: { label: c => ` €${formatNum(c.raw)} (${(c.raw/total*100).toFixed(1)}%)` } }
+        }
+      }
+    });
+  }
+
+  /* ──────────────────────────────────────────────────────
+     Meta Rendering
+  ────────────────────────────────────────────────────── */
+  function renderMeta() {
+    const tbody = document.getElementById('run-history-tbody');
+    if (!runLogData.length) {
+      tbody.innerHTML = `<tr><td colspan="8">
+        <div class="no-data">
+          <div class="no-data-icon">🤖</div>
+          No run data yet.<br>Run <code>python scripts/ai_notifier.py</code> to generate your first log.
+        </div></td></tr>`;
+      // Reset KPIs
+      ['meta-total-runs','meta-last-duration','meta-last-tokens','meta-last-cost'].forEach(id =>
+        document.getElementById(id).textContent = '—'
+      );
+      return;
+    }
+
+    const runs = [...runLogData].reverse(); // newest first
+    const last = runs[0];
+
+    // KPIs
+    document.getElementById('meta-total-runs').textContent = runLogData.length;
+    document.getElementById('meta-last-duration').textContent = last.total_duration_seconds + 's';
+    document.getElementById('meta-last-tokens').textContent = formatNumShort(last.totals.total_tokens);
+    document.getElementById('meta-last-cost').textContent = last.totals.estimated_cost_usd > 0
+      ? `$${last.totals.estimated_cost_usd.toFixed(6)}`
+      : '$0.000000*';
+
+    // Run history table
+    tbody.innerHTML = runs.map((r, i) => {
+      const hasError = r.api_calls.some(c => c.status === 'error');
+      const statusBadge = hasError
+        ? '<span style="color:var(--red)">⚠ Partial</span>'
+        : '<span style="color:var(--green)">✓ Success</span>';
+      const cost = r.totals.estimated_cost_usd > 0 ? `$${r.totals.estimated_cost_usd.toFixed(6)}` : '$0.000000*';
+      return `
+        <tr>
+          <td>${runLogData.length - i}</td>
+          <td class="mono" style="font-size:11px">${formatTs(r.timestamp)}</td>
+          <td class="primary">${r.total_duration_seconds}s</td>
+          <td>${r.total_flags_processed}</td>
+          <td>${r.totals.api_calls_count}</td>
+          <td class="primary mono">${r.totals.total_tokens.toLocaleString()}</td>
+          <td class="mono">${cost}</td>
+          <td>${statusBadge}</td>
+        </tr>
+      `;
+    }).join('');
+
+    renderTokenChart(last);
+  }
+
+  function renderTokenChart(run) {
+    const ctx = document.getElementById('token-chart').getContext('2d');
+    if (tokenChart) tokenChart.destroy();
+    const calls = run.api_calls || [];
+    if (!calls.length) return;
+
+    tokenChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: calls.map(c => c.department),
+        datasets: [
+          {
+            label: 'Input Tokens',
+            data: calls.map(c => c.prompt_tokens),
+            backgroundColor: 'rgba(6,182,212,0.6)',
+            borderColor: '#06b6d4', borderWidth: 1, borderRadius: 4,
+          },
+          {
+            label: 'Output Tokens',
+            data: calls.map(c => c.output_tokens),
+            backgroundColor: 'rgba(167,139,250,0.6)',
+            borderColor: '#a78bfa', borderWidth: 1, borderRadius: 4,
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { color: '#94a3b8', font:{size:11} } },
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const c = calls[items[0].dataIndex];
+                return [`Total: ${c.total_tokens}`, `Duration: ${c.duration_seconds}s`, `Flags: ${c.flags_count}`];
+              }
+            }
+          }
+        },
+        scales: {
+          x: { stacked: false, grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#94a3b8',font:{size:11}} },
+          y: { grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#64748b',font:{size:11}} }
+        }
+      }
+    });
+  }
+
+  /* ──────────────────────────────────────────────────────
+     Modal
+  ────────────────────────────────────────────────────── */
+  function openModal(idx) {
+    const r = (window._filteredAnomalies || [])[idx];
+    if (!r) return;
+    document.getElementById('modal-title').innerHTML =
+      `<span class="flag-badge flag-${r.flag_reason}" style="font-size:12px">${flagIcon(r.flag_reason)} ${r.flag_reason.replace(/_/g,' ')}</span>`;
+    document.getElementById('modal-body').innerHTML = `
+      <div class="modal-field"><div class="modal-field-label">Employee</div><div class="modal-field-value">${r.employee_name}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Department</div><div class="modal-field-value">${r.department}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Manager</div><div class="modal-field-value">${r.manager_name}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Merchant</div><div class="modal-field-value">${r.merchant}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Amount</div><div class="modal-field-value" style="font-size:18px;font-weight:700;color:var(--accent-a)">${formatNum(r.amount)} ${r.currency} <span style="font-size:13px;color:var(--text-secondary)">(€${formatNum(r.amount_eur)})</span></div></div>
+      <div class="modal-field"><div class="modal-field-label">Timestamp</div><div class="modal-field-value mono">${r.timestamp}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Why flagged</div><div class="modal-field-value" style="color:var(--text-secondary);font-size:13px">${flagDesc(r.flag_reason)}</div></div>
+    `;
+    document.getElementById('modal-overlay').classList.add('open');
+  }
+  function closeModal(e) {
+    if (!e || e.target === document.getElementById('modal-overlay') || e.type === 'click') {
+      document.getElementById('modal-overlay').classList.remove('open');
+    }
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+  /* ──────────────────────────────────────────────────────
+     Table Sort
+  ────────────────────────────────────────────────────── */
+  function sortTable(tableId, colIdx) {
+    const key = `${tableId}-${colIdx}`;
+    sortState[key] = !sortState[key];
+    const asc = sortState[key];
+    const tbody = document.getElementById(tableId === 'anomaly-table' ? 'anomaly-tbody' : 'run-history-tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a,b) => {
+      const av = a.cells[colIdx]?.textContent.trim() || '';
+      const bv = b.cells[colIdx]?.textContent.trim() || '';
+      const an = parseFloat(av.replace(/[€$,]/g,''));
+      const bn = parseFloat(bv.replace(/[€$,]/g,''));
+      if (!isNaN(an) && !isNaN(bn)) return asc ? an-bn : bn-an;
+      return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+    rows.forEach(r => tbody.appendChild(r));
+  }
+
+  /* ──────────────────────────────────────────────────────
+     Helpers
+  ────────────────────────────────────────────────────── */
+  function formatNum(n) {
+    if (n == null) return '—';
+    return Number(n).toLocaleString('en-DE', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function formatNumShort(n) {
+    if (n == null) return '—';
+    if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+    return n.toString();
+  }
+  function formatTs(ts) {
+    if (!ts) return '—';
+    return ts.replace('T', ' ').substring(0, 16);
+  }
+  function flagIcon(flag) {
+    return {DOUBLE_SWIPE:'⚡',WEEKEND_SPIKE:'🔴',OVERSPEND:'💸',UNUSUAL_CURRENCY:'🌍'}[flag] || '⚠';
+  }
+  function flagDesc(flag) {
+    return {
+      DOUBLE_SWIPE: 'Same merchant charged twice within ~2 minutes — possible duplicate transaction or system error.',
+      WEEKEND_SPIKE: 'High-value transaction (>500 EUR) recorded on a Saturday or Sunday — outside normal business hours.',
+      OVERSPEND: 'Employee\'s total monthly spend exceeds their allocated budget — requires manager review and finance escalation.',
+      UNUSUAL_CURRENCY: 'Transaction in RSD (Serbian Dinar) — unexpected currency for a Berlin-based company operation.'
+    }[flag] || 'Flagged for review.';
+  }
+
+  /* ──────────────────────────────────────────────────────
+     Info Popovers
+  ────────────────────────────────────────────────────── */
+  const INFO_KEYS = ['runs', 'dur', 'tok', 'cost'];
+
+  function toggleInfo(key) {
+    const isOpen = document.getElementById(`info-pop-${key}`).classList.contains('open');
+    // Close all first
+    INFO_KEYS.forEach(k => {
+      document.getElementById(`info-pop-${k}`).classList.remove('open');
+      document.getElementById(`info-btn-${k}`).classList.remove('active');
+    });
+    // If it wasn't open, open it now
+    if (!isOpen) {
+      document.getElementById(`info-pop-${key}`).classList.add('open');
+      document.getElementById(`info-btn-${key}`).classList.add('active');
+    }
+  }
+
+  // Close popover when clicking anywhere outside
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.info-btn')) {
+      INFO_KEYS.forEach(k => {
+        document.getElementById(`info-pop-${k}`)?.classList.remove('open');
+        document.getElementById(`info-btn-${k}`)?.classList.remove('active');
+      });
+    }
+  });
+
+  /* ──────────────────────────────────────────────────────
+     Init
+  ────────────────────────────────────────────────────── */
+  refreshData();
+
+</script>
+</body>
+</html>

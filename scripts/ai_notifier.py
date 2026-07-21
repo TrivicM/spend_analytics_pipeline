@@ -18,7 +18,10 @@ Usage:
 
 import sys
 import os
+import json
+import uuid
 import sqlite3
+import time as _time
 from datetime import datetime
 from collections import defaultdict
 
@@ -35,10 +38,16 @@ load_dotenv()
 # ── Paths ────────────────────────────────────────────────────────────────────
 ROOT       = os.path.join(os.path.dirname(__file__), "..")
 DB_PATH    = os.path.join(ROOT, "data", "spend.db")
-VIEWS_PATH = os.path.join(ROOT, "sql", "views.sql")
-OUT_DIR    = os.path.join(ROOT, "output", "alerts")
+VIEWS_PATH   = os.path.join(ROOT, "sql", "views.sql")
+OUT_DIR      = os.path.join(ROOT, "output", "alerts")
+RUN_LOG_PATH = os.path.join(ROOT, "output", "run_log.json")
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
+
+# Gemini 2.5 Flash Lite paid-tier pricing (USD per 1M tokens)
+# Free tier = $0.00 — update if on paid plan.
+_PRICE_INPUT_PER_1M  = 0.075
+_PRICE_OUTPUT_PER_1M = 0.30
 
 
 # ── Gemini Setup ─────────────────────────────────────────────────────────────
@@ -143,6 +152,34 @@ Flagged Transactions ({len(anomalies)} total):
 Write the complete email now:"""
 
 
+# ── Run Log ──────────────────────────────────────────────────────────────────
+def save_run_log(run_meta: dict) -> str:
+    """
+    Append this run's metadata to output/run_log.json.
+    Creates the file if it doesn't exist; appends to the existing list.
+    """
+    os.makedirs(os.path.dirname(RUN_LOG_PATH), exist_ok=True)
+
+    # Load existing log or start fresh
+    if os.path.exists(RUN_LOG_PATH):
+        try:
+            with open(RUN_LOG_PATH, "r", encoding="utf-8") as f:
+                log_data = json.load(f)
+            if not isinstance(log_data, list):
+                log_data = [log_data]   # migrate old single-object format
+        except (json.JSONDecodeError, ValueError):
+            log_data = []
+    else:
+        log_data = []
+
+    log_data.append(run_meta)
+
+    with open(RUN_LOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(log_data, f, indent=2, ensure_ascii=False)
+
+    return RUN_LOG_PATH
+
+
 # ── Output ────────────────────────────────────────────────────────────────────
 def save_alert(manager_name: str, manager_email: str, department: str, email_body: str) -> str:
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -170,6 +207,10 @@ def main() -> None:
     print("\n[START] Corporate Spend Analytics -- AI Alert Notifier")
     print("=" * 50)
 
+    run_start = _time.monotonic()
+    run_timestamp = datetime.now().isoformat()
+    run_id = str(uuid.uuid4())
+
     # 1. Connect to database
     if not os.path.exists(DB_PATH):
         print(f"[ERROR] Database not found: {DB_PATH}")
@@ -180,7 +221,9 @@ def main() -> None:
 
     # 2. Refresh views
     print("\n[1/4] Loading analytical views...")
+    t0 = _time.monotonic()
     ensure_views(conn)
+    db_duration = round(_time.monotonic() - t0, 3)
 
     # 3. Load anomalies
     print("[2/4] Fetching flagged transactions from vw_anomaly_log...")
@@ -201,37 +244,100 @@ def main() -> None:
     # 5. Generate + save one alert per manager
     print(f"\n[4/4] Drafting email alerts...\n")
     saved_files = []
+    api_call_logs = []   # token tracking per manager
 
     for (manager_name, manager_email, department), anomalies in grouped.items():
         print(f"   >> {manager_name}  ({department})  --  {len(anomalies)} flag(s)...")
         prompt = build_prompt(manager_name, department, anomalies)
 
+        call_start = _time.monotonic()
+        call_status = "success"
+        prompt_tokens = output_tokens = total_tokens = 0
+
         try:
-            # Retry up to 3 times for transient 503 errors
-            import time
             last_exc = None
             for attempt in range(1, 4):
                 try:
                     response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
                     email_body = response.text
+
+                    # ── Token usage logging ──────────────────────────────────
+                    usage = getattr(response, "usage_metadata", None)
+                    if usage:
+                        prompt_tokens  = getattr(usage, "prompt_token_count", 0) or 0
+                        output_tokens  = getattr(usage, "candidates_token_count", 0) or 0
+                        total_tokens   = getattr(usage, "total_token_count", 0) or (prompt_tokens + output_tokens)
                     break
                 except Exception as exc:
                     last_exc = exc
                     if "503" in str(exc) and attempt < 3:
                         wait = attempt * 5
                         print(f"      [RETRY {attempt}/3] 503 error, waiting {wait}s...")
-                        time.sleep(wait)
+                        _time.sleep(wait)
                     else:
                         raise
+
+            call_duration = round(_time.monotonic() - call_start, 3)
             filepath = save_alert(manager_name, manager_email, department, email_body)
             saved_files.append(filepath)
-            print(f"      [OK] Saved -> {os.path.relpath(filepath, ROOT)}")
+            print(f"      [OK] Saved -> {os.path.relpath(filepath, ROOT)}  "
+                  f"| tokens: {total_tokens} ({prompt_tokens} in / {output_tokens} out)")
+
         except Exception as exc:
+            call_duration = round(_time.monotonic() - call_start, 3)
+            call_status = "error"
+            email_body = ""
             print(f"      [ERROR] {manager_name}: {exc}")
 
-    # 6. Summary
+        api_call_logs.append({
+            "manager":          manager_name,
+            "department":       department,
+            "flags_count":      len(anomalies),
+            "prompt_tokens":    prompt_tokens,
+            "output_tokens":    output_tokens,
+            "total_tokens":     total_tokens,
+            "duration_seconds": call_duration,
+            "status":           call_status,
+        })
+
+    # 6. Build + save run log
+    total_prompt  = sum(c["prompt_tokens"]  for c in api_call_logs)
+    total_output  = sum(c["output_tokens"]  for c in api_call_logs)
+    total_tok     = sum(c["total_tokens"]   for c in api_call_logs)
+    est_cost_usd  = round(
+        (total_prompt  / 1_000_000) * _PRICE_INPUT_PER_1M +
+        (total_output / 1_000_000) * _PRICE_OUTPUT_PER_1M,
+        6
+    )
+    total_duration = round(_time.monotonic() - run_start, 3)
+
+    run_meta = {
+        "run_id":                 run_id,
+        "timestamp":              run_timestamp,
+        "model":                  GEMINI_MODEL,
+        "total_duration_seconds": total_duration,
+        "db_query_seconds":       db_duration,
+        "total_flags_processed":  total_flags,
+        "alerts_saved":           len(saved_files),
+        "api_calls":              api_call_logs,
+        "totals": {
+            "prompt_tokens":       total_prompt,
+            "output_tokens":       total_output,
+            "total_tokens":        total_tok,
+            "estimated_cost_usd":  est_cost_usd,
+            "api_calls_count":     len(api_call_logs),
+        },
+    }
+    log_path = save_run_log(run_meta)
+    print(f"\n   [LOG] Run log saved -> {os.path.relpath(log_path, ROOT)}")
+    print(f"   [LOG] Total tokens: {total_tok}  "
+          f"({total_prompt} in / {total_output} out)  "
+          f"| Est. cost: ${est_cost_usd:.6f} USD")
+
+    # 7. Summary
     print(f"\n{'=' * 50}")
     print(f"[DONE] {len(saved_files)} alert draft(s) saved to output/alerts/")
+    print(f"[DONE] Run completed in {total_duration}s")
     print("   NOTE: SIMULATION ONLY -- no real emails were sent.\n")
 
 

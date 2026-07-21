@@ -35,7 +35,7 @@ python scripts/ai_notifier.py
 
 # Step 3: Start the web dashboard server
 python scripts/dashboard_server.py
-# Opens: http://localhost:8000
+# Opens: http://localhost:8001
 ```
 
 ---
@@ -66,19 +66,21 @@ All commit messages must follow [Conventional Commits v1.0.0](https://www.conven
 ```
 spend_analytics_pipeline/
 ├── scripts/
-│   ├── generate_data.py      # Data simulation + DB population
+│   ├── generate_data.py      # Data simulation + DB population (uses urllib, no requests dep)
 │   ├── ai_notifier.py        # Gemini API alert drafter + token logger
-│   └── dashboard_server.py   # Python stdlib HTTP server (:8000)
+│   └── dashboard_server.py   # Python stdlib HTTP server (:8001)
 ├── sql/
 │   ├── schema.sql            # Table definitions
 │   └── views.sql             # Analytical views (4 views)
 ├── data/
 │   └── spend.db              # Generated SQLite database
 ├── dashboard/
-│   └── index.html            # Web dashboard: Tab 1 (Analytics) + Tab 2 (Meta)
+│   └── index.html            # Web dashboard: Tab 1 (Analytics) + Tab 2 (Observability)
 ├── output/
 │   ├── alerts/               # Generated email draft .txt files
 │   └── run_log.json          # Token usage + timing log per run
+├── docs/
+│   └── assets/               # Dashboard screenshots and animated demo WEBP
 ├── .agents/
 │   ├── AGENTS.md             # This file
 │   ├── memory/
@@ -101,6 +103,10 @@ spend_analytics_pipeline/
 | Token tracking | Extended in `ai_notifier.py` | Minimal footprint, logs to `output/run_log.json` |
 | Dashboard 2 data | Dynamic numbers + fixed recommendations | Actionable insights without over-engineering |
 | Gemini model | `gemini-2.5-flash-lite` | Optimal cost/quality for structured compliance emails |
+| HTTP client in generate_data.py | `urllib.request` + `ssl` (stdlib) | Eliminates `requests` dep; works in all envs without pip |
+| GDPR Privacy Mode | CSS `blur(5px)` via `.privacy-mode-active` on `body` | Tab 1: names blurred in table, budget list & modal; persists in `localStorage` |
+| Model Switcher | Tab 2 benchmark table with `ⓘ` popovers | Select active model at runtime; saves to `output/config.json` |
+| Dashboard port | `8001` | Avoids conflicts with common dev servers on `8000` |
 
 ---
 
@@ -109,5 +115,23 @@ spend_analytics_pipeline/
 - `data/spend.db` — regenerated on each run
 - `output/alerts/` — generated email drafts
 - `output/run_log.json` — generated run metadata
-- `venv/`, `__pycache__/`, `.env`
+- `venv/`, `.venv/`, `__pycache__/`, `.env`
 - `.agents/memory/` — agent working memory, not source code
+
+---
+
+## 8. Known Environment Notes
+
+- Two virtual environments exist locally: `venv/` (main, all deps installed) and `.venv/` (uv-managed, also fully installed as of 2026-07-21).
+- Always run scripts from the **project root**, not from inside `scripts/` subfolder (avoids duplicate path issues).
+- `generate_data.py` uses `ssl._create_unverified_context()` for Windows SSL certificate compatibility.
+- `pyproject.toml`, `.python-version`, `uv.lock` are present locally but **not tracked in git** (no decision yet on whether to include).
+
+---
+
+## 9. Git Branch Strategy
+
+- Active development: `feature/web-dashboard-and-agent-infra`
+- Stable / demo-ready: `master`
+- Workflow: commit + push to feature branch → merge to master → push master
+- Both branches are always kept in sync after each feature session.

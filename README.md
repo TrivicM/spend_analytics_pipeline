@@ -21,6 +21,11 @@
 
 ## Dashboard Preview
 
+> 🔒 **Privacy & Data Protection Note**: 
+> All employee and manager names shown in this demo are 100% synthetic (generated programmatically using Python's `Faker` library with German locale). 
+> 
+> To demonstrate enterprise GDPR compliance and secure screen-sharing capabilities, the dashboard includes an interactive **Privacy Mode (🔒)** toggle that instantly blurs all personal names and identifiers across views and detail modals.
+
 ![Spend Analytics Dashboard Interactive Demo](docs/assets/dashboard_demo.webp)
 
 ---

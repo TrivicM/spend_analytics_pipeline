@@ -14,6 +14,8 @@ Use this to avoid re-investigating already-settled questions.
 | 2026-07-21 | Token tracking: extend `ai_notifier.py` | User confirmed — minimal footprint, logs to `output/run_log.json` |
 | 2026-07-21 | Dashboard 2 data: dynamic numbers + fixed recommendations | User confirmed — actionable insights without over-engineering |
 | 2026-07-21 | Gemini model: `gemini-2.5-flash-lite` | Already in use — optimal cost/quality for structured compliance emails |
+| 2026-07-21 | Dashboard Port: 8001 | Avoids conflict with StockMonitor dashboard running on 8000 |
+| 2026-07-21 | Observability Tooltips: `ⓘ` Click Popovers | Opens downwards with contextual explanation of runs, duration, tokens, and cost |
 
 ## Known Behaviors
 

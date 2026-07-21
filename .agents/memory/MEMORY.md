@@ -24,7 +24,7 @@ Action-oriented working rules, preferences, recurring workflows, and links to re
 3. **Running the Pipeline**:
    - Generate data: `python scripts/generate_data.py`
    - Run AI notifier (also writes `output/run_log.json`): `python scripts/ai_notifier.py`
-   - Start web server: `python scripts/dashboard_server.py` → `http://localhost:8000`
+   - Start web server: `python scripts/dashboard_server.py` → `http://localhost:8001` (port 8001 avoids conflict with StockMonitor on 8000)
 
 4. **Dashboard Architecture**:
    - Single `dashboard/index.html` with two tabs: Analytics (Tab 1) and Agent Observability (Tab 2).

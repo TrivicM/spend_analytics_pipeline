@@ -171,6 +171,34 @@
       white-space: nowrap;
     }
 
+    /* Privacy Mode button & Blur styles */
+    .privacy-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 500;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .privacy-btn:hover { border-color: var(--border-active); color: var(--text-primary); }
+    .privacy-btn.active {
+      background: rgba(167, 139, 250, 0.15);
+      color: #a78bfa;
+      border-color: rgba(167, 139, 250, 0.4);
+    }
+
+    .privacy-sensitive {
+      transition: filter 0.2s ease;
+      display: inline-block;
+    }
+    body.privacy-mode-active .privacy-sensitive {
+      filter: blur(5px);
+      user-select: none;
+    }
+
     /* ── Tab Panels ─────────────────────────────────────── */
     .tab-panel { display: none; }
     .tab-panel.active { display: block; }
@@ -1097,10 +1125,6 @@
     if (tab === 'meta' && runLogData.length === 0) loadRunLog();
   }
 
-  function togglePrivacyMode() {
-    document.body.classList.toggle('privacy-mode');
-  }
-
   /* ──────────────────────────────────────────────────────
      Data Loading — Analytics
   ────────────────────────────────────────────────────── */
@@ -1424,9 +1448,9 @@
     document.getElementById('modal-title').innerHTML =
       `<span class="flag-badge flag-${r.flag_reason}" style="font-size:12px">${flagIcon(r.flag_reason)} ${r.flag_reason.replace(/_/g,' ')}</span>`;
     document.getElementById('modal-body').innerHTML = `
-      <div class="modal-field"><div class="modal-field-label">Employee</div><div class="modal-field-value">${r.employee_name}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Employee</div><div class="modal-field-value"><span class="privacy-sensitive">${r.employee_name}</span></div></div>
       <div class="modal-field"><div class="modal-field-label">Department</div><div class="modal-field-value">${r.department}</div></div>
-      <div class="modal-field"><div class="modal-field-label">Manager</div><div class="modal-field-value">${r.manager_name}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Manager</div><div class="modal-field-value"><span class="privacy-sensitive">${r.manager_name}</span></div></div>
       <div class="modal-field"><div class="modal-field-label">Merchant</div><div class="modal-field-value">${r.merchant}</div></div>
       <div class="modal-field"><div class="modal-field-label">Amount</div><div class="modal-field-value" style="font-size:18px;font-weight:700;color:var(--accent-a)">${formatNum(r.amount)} ${r.currency} <span style="font-size:13px;color:var(--text-secondary)">(€${formatNum(r.amount_eur)})</span></div></div>
       <div class="modal-field"><div class="modal-field-label">Timestamp</div><div class="modal-field-value mono">${r.timestamp}</div></div>

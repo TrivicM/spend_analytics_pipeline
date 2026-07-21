@@ -146,6 +146,29 @@ def load_run_log() -> list:
         return []
 
 
+CONFIG_PATH = os.path.join(ROOT, "output", "config.json")
+
+def load_config() -> dict:
+    """Load config.json or return default active_model."""
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"active_model": "gemini-2.5-flash-lite"}
+
+def save_config(cfg: dict) -> bool:
+    """Save config dict to config.json."""
+    try:
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+
 # ── HTTP Handler ──────────────────────────────────────────────────────────────
 
 class SpendDashboardHandler(BaseHTTPRequestHandler):
@@ -189,6 +212,30 @@ class SpendDashboardHandler(BaseHTTPRequestHandler):
             data = load_run_log()
             self.send_json(data)
 
+        elif path == "/api/config":
+            cfg = load_config()
+            self.send_json(cfg)
+
+        else:
+            self.send_json({"error": f"Unknown endpoint: {path}"}, 404)
+
+    def do_POST(self) -> None:
+        path = urlparse(self.path).path
+
+        if path == "/api/config":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(body.decode("utf-8"))
+                if "active_model" in payload:
+                    current = load_config()
+                    current["active_model"] = payload["active_model"]
+                    if save_config(current):
+                        self.send_json({"status": "success", "config": current})
+                        return
+                self.send_json({"error": "Invalid payload"}, 400)
+            except Exception as e:
+                self.send_json({"error": str(e)}, 500)
         else:
             self.send_json({"error": f"Unknown endpoint: {path}"}, 404)
 

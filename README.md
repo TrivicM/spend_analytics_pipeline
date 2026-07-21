@@ -19,6 +19,12 @@
 
 ---
 
+## Dashboard Preview
+
+![Spend Analytics Dashboard Interactive Demo](docs/assets/dashboard_demo.webp)
+
+---
+
 ## Two-Layer Web Dashboard
 
 The application ships with a zero-dependency local web dashboard operating on two distinct layers:
@@ -29,14 +35,19 @@ Designed for finance operations and department heads:
 - **Filterable Anomaly Log**: Interactive table flagging 4 specific anomaly types with detailed transaction popups.
 - **Department & Budget Heatmaps**: Visual tracking of budget allocation vs. actual spend per employee.
 - **Multi-Currency Breakdown**: Automated tracking of EUR, USD, and unexpected foreign currencies.
+- **GDPR Privacy Mode (🔒)**: Interactive toggle button to instantly blur employee PII for safe screen-sharing and demo meetings.
+
+![Tab 1 — Analytics Dashboard with GDPR Privacy Blur](docs/assets/dashboard_analytics_privacy.png)
 
 ### 2. Agent Observability Layer (Tab 2)
 Designed for operations managers and system admins:
 - **Run History Ledger**: Execution times, total processed flags, and total API call counts.
 - **Token Breakdown**: Visual stacked chart tracking prompt (input) vs. candidate (output) tokens per department.
+- **Dynamic Model Switcher & Benchmarks**: Compare Gemini 2.5 Flash Lite, Flash, Pro, and Thinking models with interactive `ⓘ` popovers and select active models on the fly.
 - **Live Cost Estimation**: Real-time dollar tracking based on Gemini API pricing models.
 - **Contextual Tooltips (`ⓘ`)**: Educational popovers explaining what happens in each run, comparing machine execution against human hours, and mapping token counts to word volumes.
-- **Prioritized Optimization List**: Actionable architectural recommendations to reduce API spend further.
+
+![Tab 2 — Agent Observability & Model Switcher](docs/assets/dashboard_observability.png)
 
 ---
 

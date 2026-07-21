@@ -41,13 +41,33 @@ DB_PATH    = os.path.join(ROOT, "data", "spend.db")
 VIEWS_PATH   = os.path.join(ROOT, "sql", "views.sql")
 OUT_DIR      = os.path.join(ROOT, "output", "alerts")
 RUN_LOG_PATH = os.path.join(ROOT, "output", "run_log.json")
+CONFIG_PATH  = os.path.join(ROOT, "output", "config.json")
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+# Model pricing registry (USD per 1M tokens)
+MODEL_PRICING = {
+    "gemini-2.5-flash-lite":           {"input": 0.075, "output": 0.30},
+    "gemini-2.5-flash":                {"input": 0.150, "output": 0.60},
+    "gemini-2.5-pro":                  {"input": 1.250, "output": 5.00},
+    "gemini-2.0-flash-thinking-exp-01-21": {"input": 0.150, "output": 0.60},
+}
 
-# Gemini 2.5 Flash Lite paid-tier pricing (USD per 1M tokens)
-# Free tier = $0.00 — update if on paid plan.
-_PRICE_INPUT_PER_1M  = 0.075
-_PRICE_OUTPUT_PER_1M = 0.30
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
+
+def load_active_model() -> tuple[str, float, float]:
+    """Read active model from config.json or fall back to default."""
+    model_name = DEFAULT_MODEL
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+                model_name = cfg.get("active_model", DEFAULT_MODEL)
+        except Exception:
+            model_name = DEFAULT_MODEL
+
+    pricing = MODEL_PRICING.get(model_name, MODEL_PRICING[DEFAULT_MODEL])
+    return model_name, pricing["input"], pricing["output"]
+
+GEMINI_MODEL, _PRICE_INPUT_PER_1M, _PRICE_OUTPUT_PER_1M = load_active_model()
 
 
 # ── Gemini Setup ─────────────────────────────────────────────────────────────

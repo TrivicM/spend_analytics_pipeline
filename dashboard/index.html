@@ -427,6 +427,21 @@
     .badge-recommended { background: rgba(6,182,212,0.15); color: var(--accent-m); border: 1px solid rgba(6,182,212,0.3); }
     .badge-expensive    { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
 
+    /* Model select button */
+    .btn-select-model {
+      padding: 4px 10px; font-size: 11px; font-weight: 600;
+      border-radius: 6px; border: 1px solid rgba(6,182,212,0.4);
+      background: rgba(6,182,212,0.1); color: var(--accent-m);
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn-select-model:hover {
+      background: var(--accent-m); color: #000;
+    }
+    .model-active .btn-select-model {
+      background: var(--accent-m); color: #000; border-color: var(--accent-m);
+      font-weight: 700; cursor: default;
+    }
+
     /* ── Info Tooltip ──────────────────────────────────────── */
     .info-btn {
       display: inline-flex; align-items: center; justify-content: center;
@@ -582,6 +597,9 @@
         <option value="OVERSPEND">Overspend</option>
         <option value="UNUSUAL_CURRENCY">Unusual Currency</option>
       </select>
+      <button class="privacy-btn" id="privacy-btn" onclick="togglePrivacyMode()" title="Toggle GDPR Privacy Blur (Hide/Show PII)">
+        <span id="privacy-icon">👁️</span> Privacy Mode: <span id="privacy-status">OFF</span>
+      </button>
       <button class="refresh-btn" id="refresh-btn" onclick="refreshData()">
         <span class="refresh-icon" style="display:inline-block">↻</span>
         Refresh
@@ -907,9 +925,9 @@
       <div class="card">
         <div class="section-title">
           <span class="section-title-dot" style="background:var(--accent-m);box-shadow:0 0 8px var(--accent-m-glow)"></span>
-          Model Benchmark — Gemini Family
+          Model Benchmark — Gemini Family &amp; Selection
         </div>
-        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Simulated comparison based on public Gemini pricing (Q3 2025). Estimated for a typical 5-manager run (~8,000 total tokens).</p>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Select an active model for the AI pipeline. Click <button class="info-btn" style="pointer-events:none;margin:0 2px;">i</button> for specs, pros/cons, and pipeline fit.</p>
         <div class="table-wrapper">
           <table class="benchmark-table">
             <thead>
@@ -918,39 +936,117 @@
                 <th>Input $/1M</th>
                 <th>Output $/1M</th>
                 <th>Est. Run Cost</th>
-                <th>Quality Fit</th>
-                <th>Verdict</th>
+                <th>Pipeline Fit</th>
+                <th>Info</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="model-active">
+
+              <!-- 1. Flash Lite -->
+              <tr id="row-model-lite" class="model-active">
                 <td class="primary mono">gemini-2.5-flash-lite</td>
                 <td>$0.075</td>
                 <td>$0.30</td>
                 <td class="primary">~$0.001</td>
-                <td>⭐⭐⭐⭐</td>
-                <td><span class="model-badge badge-recommended">✓ Recommended</span></td>
+                <td>⭐⭐⭐⭐⭐</td>
+                <td>
+                  <button class="info-btn" id="info-btn-mod-lite" onclick="toggleInfo('mod-lite')" aria-label="Model info">i
+                    <div class="info-popover" id="info-pop-mod-lite">
+                      <div class="info-popover-title">⚡ Gemini 2.5 Flash Lite (Recommended)</div>
+                      <div class="info-popover-body">
+                        <strong>Specialization:</strong> High-throughput, cost-sensitive structured tasks.<br>
+                        <strong>Pros:</strong> Ultra-fast (~1.2s), lowest API cost ($0.001/run), 100% reliable for template emails.<br>
+                        <strong>Cons:</strong> Less creative for complex open-ended prose.<br>
+                        <strong>Pipeline Fit:</strong> <strong>⭐⭐⭐⭐⭐ Ideal</strong>. Perfect match for structured compliance alerts.
+                      </div>
+                    </div>
+                  </button>
+                </td>
+                <td>
+                  <button class="btn-select-model" id="btn-mod-lite" onclick="selectModel('gemini-2.5-flash-lite')">Active</button>
+                </td>
               </tr>
-              <tr>
+
+              <!-- 2. Flash -->
+              <tr id="row-model-flash">
                 <td class="primary mono">gemini-2.5-flash</td>
-                <td>$0.30</td>
-                <td>$1.00</td>
-                <td>~$0.004</td>
-                <td>⭐⭐⭐⭐⭐</td>
-                <td><span class="model-badge" style="background:rgba(234,179,8,0.15);color:var(--yellow);border:1px solid rgba(234,179,8,0.3);">Overkill</span></td>
+                <td>$0.150</td>
+                <td>$0.60</td>
+                <td class="primary">~$0.002</td>
+                <td>⭐⭐⭐⭐</td>
+                <td>
+                  <button class="info-btn" id="info-btn-mod-flash" onclick="toggleInfo('mod-flash')" aria-label="Model info">i
+                    <div class="info-popover" id="info-pop-mod-flash">
+                      <div class="info-popover-title">⚖️ Gemini 2.5 Flash (Balanced)</div>
+                      <div class="info-popover-body">
+                        <strong>Specialization:</strong> Multimodal, general-purpose fast reasoning.<br>
+                        <strong>Pros:</strong> Slightly better phrasing when summarizing >10 anomalies.<br>
+                        <strong>Cons:</strong> 2x cost of Flash Lite without noticeable quality difference for short emails.<br>
+                        <strong>Pipeline Fit:</strong> <strong>⭐⭐⭐⭐ Good</strong>. Great backup option if prompts become highly complex.
+                      </div>
+                    </div>
+                  </button>
+                </td>
+                <td>
+                  <button class="btn-select-model" id="btn-mod-flash" onclick="selectModel('gemini-2.5-flash')">Select</button>
+                </td>
               </tr>
-              <tr>
+
+              <!-- 3. Pro -->
+              <tr id="row-model-pro">
                 <td class="primary mono">gemini-2.5-pro</td>
-                <td>$1.25</td>
-                <td>$10.00</td>
-                <td>~$0.09</td>
-                <td>⭐⭐⭐⭐⭐</td>
-                <td><span class="model-badge badge-expensive">Not Justified</span></td>
+                <td>$1.250</td>
+                <td>$5.00</td>
+                <td class="primary">~$0.015</td>
+                <td>⭐⭐</td>
+                <td>
+                  <button class="info-btn" id="info-btn-mod-pro" onclick="toggleInfo('mod-pro')" aria-label="Model info">i
+                    <div class="info-popover" id="info-pop-mod-pro">
+                      <div class="info-popover-title">🧠 Gemini 2.5 Pro (Heavyweight)</div>
+                      <div class="info-popover-body">
+                        <strong>Specialization:</strong> Deep reasoning, complex coding, multi-page document synthesis.<br>
+                        <strong>Pros:</strong> Exceptional depth and nuance.<br>
+                        <strong>Cons:</strong> 15x-20x more expensive, slower latency (~4.5s).<br>
+                        <strong>Pipeline Fit:</strong> <strong>⭐⭐ Overkill</strong>. Unnecessary for drafting standard transactional emails.
+                      </div>
+                    </div>
+                  </button>
+                </td>
+                <td>
+                  <button class="btn-select-model" id="btn-mod-pro" onclick="selectModel('gemini-2.5-pro')">Select</button>
+                </td>
               </tr>
+
+              <!-- 4. Flash Thinking -->
+              <tr id="row-model-think">
+                <td class="primary mono">gemini-2.0-flash-thinking</td>
+                <td>$0.150</td>
+                <td>$0.60</td>
+                <td class="primary">~$0.005</td>
+                <td>⭐⭐⭐</td>
+                <td>
+                  <button class="info-btn" id="info-btn-mod-think" onclick="toggleInfo('mod-think')" aria-label="Model info">i
+                    <div class="info-popover" id="info-pop-mod-think">
+                      <div class="info-popover-title">🔍 Gemini 2.0 Flash Thinking (Reasoning)</div>
+                      <div class="info-popover-body">
+                        <strong>Specialization:</strong> Explicit step-by-step internal reasoning before answering.<br>
+                        <strong>Pros:</strong> Deep logic validation for fraud detection edge cases.<br>
+                        <strong>Cons:</strong> Generates "thinking tokens" increasing total output volume.<br>
+                        <strong>Pipeline Fit:</strong> <strong>⭐⭐⭐ Specialized</strong>. Useful if evaluating complex multi-factor fraud risks.
+                      </div>
+                    </div>
+                  </button>
+                </td>
+                <td>
+                  <button class="btn-select-model" id="btn-mod-think" onclick="selectModel('gemini-2.0-flash-thinking-exp-01-21')">Select</button>
+                </td>
+              </tr>
+
             </tbody>
           </table>
         </div>
-        <p style="font-size:11px;color:var(--text-muted);margin-top:14px;">* Free tier covers most usage. Paid pricing shown for scale reference. Verify at <a href="https://ai.google.dev/pricing" target="_blank" style="color:var(--accent-m);">ai.google.dev/pricing</a>.</p>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:14px;">* Model pricing based on Google Gemini API rates. Selecting a model saves preference to <code>output/config.json</code> for the next run.</p>
       </div>
     </div>
 
@@ -999,6 +1095,10 @@
     document.getElementById(`tab-${tab}-btn`).classList.add('active');
     document.getElementById('analytics-controls').style.display = tab === 'analytics' ? 'flex' : 'none';
     if (tab === 'meta' && runLogData.length === 0) loadRunLog();
+  }
+
+  function togglePrivacyMode() {
+    document.body.classList.toggle('privacy-mode');
   }
 
   /* ──────────────────────────────────────────────────────
@@ -1092,7 +1192,7 @@
     }
     tbody.innerHTML = rows.map((r, i) => `
       <tr onclick="openModal(${i})" data-idx="${i}">
-        <td class="primary">${r.employee_name}</td>
+        <td class="primary"><span class="privacy-sensitive">${r.employee_name}</span></td>
         <td>${r.department}</td>
         <td>${r.merchant}</td>
         <td class="primary mono">${formatNum(r.amount_eur)}</td>
@@ -1390,21 +1490,25 @@
   }
 
   /* ──────────────────────────────────────────────────────
-     Info Popovers
+     Info Popovers & Model Selection
   ────────────────────────────────────────────────────── */
-  const INFO_KEYS = ['runs', 'dur', 'tok', 'cost'];
+  const INFO_KEYS = ['runs', 'dur', 'tok', 'cost', 'mod-lite', 'mod-flash', 'mod-pro', 'mod-think'];
 
   function toggleInfo(key) {
-    const isOpen = document.getElementById(`info-pop-${key}`).classList.contains('open');
+    const el = document.getElementById(`info-pop-${key}`);
+    const btn = document.getElementById(`info-btn-${key}`);
+    if (!el) return;
+
+    const isOpen = el.classList.contains('open');
     // Close all first
     INFO_KEYS.forEach(k => {
-      document.getElementById(`info-pop-${k}`).classList.remove('open');
-      document.getElementById(`info-btn-${k}`).classList.remove('active');
+      document.getElementById(`info-pop-${k}`)?.classList.remove('open');
+      document.getElementById(`info-btn-${k}`)?.classList.remove('active');
     });
     // If it wasn't open, open it now
     if (!isOpen) {
-      document.getElementById(`info-pop-${key}`).classList.add('open');
-      document.getElementById(`info-btn-${key}`).classList.add('active');
+      el.classList.add('open');
+      btn?.classList.add('active');
     }
   }
 
@@ -1418,10 +1522,103 @@
     }
   });
 
+  const MODEL_ROW_MAP = {
+    'gemini-2.5-flash-lite': 'row-model-lite',
+    'gemini-2.5-flash': 'row-model-flash',
+    'gemini-2.5-pro': 'row-model-pro',
+    'gemini-2.0-flash-thinking-exp-01-21': 'row-model-think'
+  };
+
+  const MODEL_BTN_MAP = {
+    'gemini-2.5-flash-lite': 'btn-mod-lite',
+    'gemini-2.5-flash': 'btn-mod-flash',
+    'gemini-2.5-pro': 'btn-mod-pro',
+    'gemini-2.0-flash-thinking-exp-01-21': 'btn-mod-think'
+  };
+
+  async function loadActiveModelConfig() {
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.active_model) {
+          updateActiveModelUI(data.active_model);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load active model config:', e);
+    }
+  }
+
+  function updateActiveModelUI(modelName) {
+    Object.keys(MODEL_ROW_MAP).forEach(m => {
+      const row = document.getElementById(MODEL_ROW_MAP[m]);
+      const btn = document.getElementById(MODEL_BTN_MAP[m]);
+      if (row && btn) {
+        if (m === modelName) {
+          row.classList.add('model-active');
+          btn.textContent = 'Active';
+        } else {
+          row.classList.remove('model-active');
+          btn.textContent = 'Select';
+        }
+      }
+    });
+  }
+
+  async function selectModel(modelName) {
+    updateActiveModelUI(modelName);
+    try {
+      const res = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active_model: modelName })
+      });
+      if (!res.ok) {
+        console.error('Failed to update config on server');
+      }
+    } catch (e) {
+      console.error('Error updating config:', e);
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────
+     GDPR Privacy Mode
+  ────────────────────────────────────────────────────── */
+  function togglePrivacyMode(forceState) {
+    const isModeActive = forceState !== undefined ? forceState : !document.body.classList.contains('privacy-mode-active');
+    const btn = document.getElementById('privacy-btn');
+    const status = document.getElementById('privacy-status');
+    const icon = document.getElementById('privacy-icon');
+
+    if (isModeActive) {
+      document.body.classList.add('privacy-mode-active');
+      btn.classList.add('active');
+      status.textContent = 'ON';
+      icon.textContent = '🔒';
+      localStorage.setItem('privacy_mode', 'true');
+    } else {
+      document.body.classList.remove('privacy-mode-active');
+      btn.classList.remove('active');
+      status.textContent = 'OFF';
+      icon.textContent = '👁️';
+      localStorage.setItem('privacy_mode', 'false');
+    }
+  }
+
+  function initPrivacyMode() {
+    const saved = localStorage.getItem('privacy_mode');
+    if (saved === 'true') {
+      togglePrivacyMode(true);
+    }
+  }
+
   /* ──────────────────────────────────────────────────────
      Init
   ────────────────────────────────────────────────────── */
   refreshData();
+  loadActiveModelConfig();
+  initPrivacyMode();
 
 </script>
 </body>

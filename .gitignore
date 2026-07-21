@@ -17,8 +17,15 @@ venv/
 .DS_Store
 Thumbs.db
 
-# Output alerts (generated at runtime)
+# Output alerts & logs (generated at runtime)
 output/alerts/*.txt
+output/run_log.json
+
+# Database (generated at runtime)
+data/spend.db
+
+# Local agent working session memory (keep skills and knowledge in repo)
+.agents/memory/
 
 # Excel temp files
 ~$*.xlsx

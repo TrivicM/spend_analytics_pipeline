@@ -25,7 +25,9 @@ import sys
 import sqlite3
 import random
 import os
-import requests
+import json
+import ssl
+import urllib.request
 from datetime import datetime, timedelta
 from faker import Faker
 
@@ -68,16 +70,17 @@ def fetch_exchange_rates() -> dict[str, float]:
     """Fetch live EUR base rates via free public API (no key required)."""
     url = "https://api.exchangerate-api.com/v4/latest/EUR"
     try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        rates_data = resp.json()["rates"]
-        rates = {
-            "EUR": 1.0,
-            "USD": round(rates_data["USD"], 4),
-            "RSD": round(rates_data["RSD"], 4),
-        }
-        print(f"   Live rates fetched  →  1 EUR = {rates['USD']} USD  |  1 EUR = {rates['RSD']} RSD")
-        return rates
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        ctx = ssl._create_unverified_context()
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+            rates_data = json.loads(resp.read().decode("utf-8"))["rates"]
+            rates = {
+                "EUR": 1.0,
+                "USD": round(rates_data["USD"], 4),
+                "RSD": round(rates_data["RSD"], 4),
+            }
+            print(f"   Live rates fetched  →  1 EUR = {rates['USD']} USD  |  1 EUR = {rates['RSD']} RSD")
+            return rates
     except Exception as exc:
         print(f"   ⚠️  Could not fetch live rates ({exc}). Using fallback values.")
         return {"EUR": 1.0, "USD": 1.08, "RSD": 117.5}
